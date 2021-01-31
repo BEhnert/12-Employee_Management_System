@@ -10,7 +10,8 @@ var connection = mysql.createConnection({
   user: "boot2020",
   // Your password
   password: "password",
-  database: "personnel"
+  database: "personnel",
+  multipleStatements: true
 });
 
 // connect to the mysql server and sql database
@@ -68,9 +69,9 @@ function viewAllEmp() {
   connection.query("SELECT * FROM employee", function (err, results) {
     if (err) throw err;
     console.table(results);
+    setTimeout(mainMenu, 3000)
   });
   console.clear();
-  mainMenu();
 }
 
 const viewAllByMgr = async () => {
@@ -92,10 +93,10 @@ const viewAllByMgr = async () => {
           function (err, results) {
             if (err) throw err;
             console.table(results);
+            setTimeout(mainMenu, 3000);
           });
       });
   });
- mainMenu();
 }
 
 const viewByDept = async () => {
@@ -131,59 +132,72 @@ const viewByDept = async () => {
       where personnel.department.id=${dept_id}`, function (err, results) {
         if (err) throw err;
         console.table(results);
+        setTimeout(mainMenu, 3000);
       });
-      mainMenu();
+
     });
 }
 
-const addEmployee = async => {
-  inquirer
-    .prompt([
-      {
-        name: "firstName",
-        type: "input",
-        message: "What is the employee's first name?"
-      },
-      {
-        name: "lastName",
-        type: "input",
-        message: "What is the employee's last name?"
-      },
-      {
-        type: "list",
-        name: "action",
-        message: "What is the employee's role??",
-        choices: ["Sales", "Engineering",
-          "Finance", "Legal"]
-      },
-      {
-        type: "list",
-        name: "action",
-        message: "Who is the employee's manager?",
-        choices: ["Sales", "Engineering",
-          "Finance", "Legal"]
-      }
-    ])
-    .then(function (answer) {
-      // when finished prompting, insert a new item into the db with that info
-      connection.query(
-        "INSERT INTO employee SET ?",
+const addEmployee = async () => {
+  connection.query("SELECT first_name, last_name, id FROM employee WHERE manager_id IS NULL ORDER by manager_id ", function (err, results) {
+    if (err) throw err;
+    let modResults = results.map(each => {
+      return `${each.id} ${each.first_name} ${each.last_name}`
+    })
+    inquirer
+      .prompt([
         {
-          first_name: answer.firstName,
-          last_name: answer.lastName,
-
-          //NEED TO GET ROLES, THEN IDs, same for MANAGER
-          role_id: 1,
-          manager_id: 3
+          name: "firstName",
+          type: "input",
+          message: "What is the employee's first name?"
         },
-        function (err) {
-          if (err) throw err;
-          console.log("Your employee was created successfully!");
-        }
-      );
-    });
+        {
+          name: "lastName",
+          type: "input",
+          message: "What is the employee's last name?"
+        },
+        {
+          type: "list",
+          name: "role",
+          message: "What is the employee's role??",
+          choices: [
+            { name: "Sales", value: '1' },
+            { name: "Engineering", value: '2' },
+            { name: "Finance", value: '3' },
+            { name: "Legal", value: '4' }
+          ]
+        },
 
-  mainMenu();
+        {
+          type: "list",
+          name: "manager",
+          message: "Who is the employee's manager?",
+          choices: modResults
+        }
+      ])
+      .then(function (answer) {
+        console.log(answer.role);
+        console.log(answer.manager);
+        // when finished prompting, insert a new item into the db with that info
+        let id = answer.manager.split(" ")[0];
+        connection.query(
+          "INSERT INTO employee SET ?",
+          {
+            first_name: answer.firstName,
+            last_name: answer.lastName,
+
+            //NEED TO GET ROLES, THEN IDs, same for MANAGER
+            role_id: answer.role,
+            manager_id: id
+          },
+          function (err) {
+            if (err) throw err;
+            console.log("Your employee was created successfully!");
+            setTimeout(mainMenu, 3000);
+          }
+        );
+      });
+  });
 }
 
 const removeEmployee = async => {
@@ -203,30 +217,129 @@ const removeEmployee = async => {
         .then(function (answer) {
           let id = answer.person.split(" ")[0];
           connection.query(`DELETE FROM employee WHERE id = ${id}`,
-            {
-              first_name: answer.firstName,
-              last_name: answer.lastName,
-            },
+            // {
+            //   first_name: answer.firstName,
+            //   last_name: answer.lastName,
+            // },
             function (err, results) {
               if (err) throw err;
               console.table(results);
+              setTimeout(mainMenu, 3000)
             });
         });
     });
-  mainMenu();
 }
 const updateRole = async => {
-  console.log("update Role");
-  mainMenu();
+  connection.query("SELECT id, title FROM roles",
+    function (err, results) {
+      if (err) throw err;
+      console.log(results);
+      let roleResults = results.map(each => {
+        return `${each.id} ${each.title}`
+      });
+      console.log(roleResults);
+  connection.query("SELECT first_name, last_name, id FROM employee",
+  function (err, results) {
+    if (err) throw err;
+    console.log(results);
+    let modResults = results.map(each => {
+      return `${each.id} ${each.first_name} ${each.last_name}`
+    });
+    console.log(modResults);
+
+    inquirer.prompt([
+      {
+      message: "Which employee's role do you want to update?",
+      type: "list",
+      name: "person",
+      choices: modResults
+      },
+      {
+        message: "What is the employee's new role?",
+        type: "list",
+        name: "role",
+        choices: roleResults
+      }
+    ]
+    )
+      .then(function (answer) {
+        console.log(answer.person);
+        console.log(answer.role);
+        let id = answer.person.split(" ")[0];
+        let role_id = answer.role.split(" ")[0];
+        connection.query(`UPDATE employee SET ? WHERE id = ${id}`,
+          {
+            role_id: role_id
+          },
+          function (err, results) {
+            if (err) throw err;
+            console.table(results);
+            setTimeout(mainMenu, 3000)
+          });
+      });
+  });
+});
 }
 
 const updateMgr = async => {
-  console.log("update Mgr");
-  mainMenu();
+  connection.query("SELECT first_name, last_name, id FROM employee WHERE manager_id IS NULL",
+    function (err, results) {
+      if (err) throw err;
+      console.log(results);
+      let mgrResults = results.map(each => {
+        return `${each.id} ${each.first_name} ${each.last_name}`
+      });
+      console.log(mgrResults);
+      connection.query("SELECT first_name, last_name, id FROM employee WHERE manager_id IS NOT NULL",
+        function (err, results) {
+          if (err) throw err;
+          console.log(results);
+          let modResults = results.map(each => {
+            return `${each.id} ${each.first_name} ${each.last_name}`
+          });
+          console.log(modResults);
+
+          inquirer.prompt([
+            {
+            message: "Which employee do you want to update with new manager?",
+            type: "list",
+            name: "person",
+            choices: modResults
+            },
+            {
+              message: "Who is the employee's new manager?",
+              type: "list",
+              name: "manager",
+              choices: mgrResults
+            }
+          ]
+          )
+            .then(function (answer) {
+              console.log(answer.person);
+              console.log(answer.manager);
+              let id = answer.person.split(" ")[0];
+              let mgr_id = answer.manager.split(" ")[0];
+              connection.query(`UPDATE employee SET ? WHERE id = ${id}`,
+                {
+                  manager_id: mgr_id
+                },
+                function (err, results) {
+                  if (err) throw err;
+                  console.table(results);
+                  setTimeout(mainMenu, 3000)
+                });
+            });
+        });
+    });
 }
 
 const viewAllData = async => {
-  console.log("view all data");
-  mainMenu();
+  console.clear();
+  connection.query("SELECT employee.id, first_name, last_name, title, salary, dept_name from employee, roles, department where employee.role_id=roles.id && roles.dept_id=department.id", function (err, results) {
+    if (err) throw err;
+    console.table(results);
+    setTimeout(mainMenu, 3000)
+  });
+  console.clear();
 }
 
